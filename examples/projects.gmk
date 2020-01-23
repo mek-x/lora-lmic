@@ -15,7 +15,7 @@ CC = gcc
 LN = gcc
 
 LMICDIR  = ../../lmic
-HALDIR   = ../../lora_gps_hat
+HALDIR   = ../../x86_sim
 TOOLSDIR   = ../../tools
 BUILDDIR = build
 
