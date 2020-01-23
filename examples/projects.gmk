@@ -9,7 +9,7 @@ LMICCFG += -DCFG_DEBUG -DCFG_eu868 -DCFG_sx1276_radio -DDEBUG_LMIC -DDEBUG_HAL
 
 CCOPTS = -c -std=gnu99
 
-LNOPTS = -lwiringPi
+#LNOPTS = -lwiringPi
 INC = .
 CC = gcc
 LN = gcc
@@ -30,14 +30,14 @@ ${BUILDDIR}/%.o: %.c | ${BUILDDIR}
 	${CC} ${CCOPTS} ${LMICCFG} -I${INC} -I${LMICDIR} -I${HALDIR} $< -o$@
 
 ${BUILDDIR}/%.o: %.s | ${BUILDDIR}
-	${AS} ${ASOPTS} -I${INC} $< -o $@ 
+	${AS} ${ASOPTS} -I${INC} $< -o $@
 
 ${BUILDDIR}/%.out: ${OBJS}
 	${LN} ${LNOPTS} -o $@ $^
 
 
 #all: ${BUILDDIR}/$(notdir ${CURDIR}).out ${BUILDDIR}/$(notdir ${CURDIR}).bin ${BUILDDIR}/$(notdir ${CURDIR}).hex
-all: ${BUILDDIR}/$(notdir ${CURDIR}).out 
+all: ${BUILDDIR}/$(notdir ${CURDIR}).out
 
 clean:
 	rm -rf ${BUILDDIR} Debug RTE settings *.dep *.bak *.sfr *.map *.uvguix.*

@@ -1,26 +1,26 @@
 //
 // BSD 3-Clause License
-// 
-// Hardware Abstraction Layer (HAL) targeted to Raspberry Pi and 
+//
+// Hardware Abstraction Layer (HAL) targeted to Raspberry Pi and
 // Dragino LoRa/GPS HAT
-// 
+//
 // Copyright (c) 2017, Wolfgang Klenk
 // All rights reserved.
-// 
+//
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
-// 
+//
 // * Redistributions of source code must retain the above copyright notice, this
 //   list of conditions and the following disclaimer.
-// 
+//
 // * Redistributions in binary form must reproduce the above copyright notice,
 //   this list of conditions and the following disclaimer in the documentation
 //   and/or other materials provided with the distribution.
-// 
+//
 // * Neither the name of the copyright holder nor the names of its
 //   contributors may be used to endorse or promote products derived from
 //  this software without specific prior written permission.
-// 
+//
 // THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 // AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 // IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -31,23 +31,28 @@
 // CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-// 
+//
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <time.h>
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
 #include <poll.h>
 #include <fcntl.h>
 #include <assert.h>
-
-#include <wiringPi.h>
-#include <wiringPiSPI.h>
+#include <time.h>
 
 #include "lmic.h"
-#include "gpio.h"
+//#include "gpio.h"
+
+#define OUTPUT 0
+#define INPUT 1
+#define LOW 0
+#define HIGH 1
+#define pinMode(a,b) printf("GPIO mode: %d %s\n", a, (b) ? "in" : "out")
+#define digitalWrite(a,b) printf("GPIO write: %d %s\n", a , (b) ? "hi" : "lo")
+#define digitalRead(a) printf("GPIO read: %d\n", a)
 
 // Note: WiringPi Pin Numbering Schema
 const int WIRING_PI_PIN_NSS = 6;
@@ -73,7 +78,7 @@ void hal_init () {
    fprintf(stdout, "%09d HAL: Initializing ...\n", osticks2ms(hal_ticks()));
 #endif
 
-   wiringPiSetup();
+//   wiringPiSetup();
 
    // Pin Direction
    pinMode(WIRING_PI_PIN_NSS, OUTPUT);
@@ -82,26 +87,26 @@ void hal_init () {
    // WiringPi is missing a feature to _blocking_ wait for pins change
    // their values using the OS system call "poll". For this reason, we
    // needed to implement it on our own.
-   for (int i=0 ; i<3 ; i++) {
-      gpioUnexportPin(BCM_PIN_DIO[i]);
-   }
+   // for (int i=0 ; i<3 ; i++) {
+   //    gpioUnexportPin(BCM_PIN_DIO[i]);
+   // }
 
-   for (int i=0 ; i<3 ; i++) {
-      gpioExportPin(BCM_PIN_DIO[i]);
-      gpioSetPinDirection(BCM_PIN_DIO[i], GPIO_DIRECTION_IN);
-      gpioSetPinEdge(BCM_PIN_DIO[i], GPIO_EDGE_RISING); 
-   }
+   // for (int i=0 ; i<3 ; i++) {
+   //    gpioExportPin(BCM_PIN_DIO[i]);
+   //    gpioSetPinDirection(BCM_PIN_DIO[i], GPIO_DIRECTION_IN);
+   //    gpioSetPinEdge(BCM_PIN_DIO[i], GPIO_EDGE_RISING);
+   // }
 
-   int rc = wiringPiSPISetup(0, 10000000);
-   if (rc < 0) {
-      fprintf(stderr, "HAL: Initialization of SPI failed: %s\n", strerror(errno));
-      hal_failed();
-   }
+   //int rc = wiringPiSPISetup(0, 10000000);
+// //   if (rc < 0) {
+//       fprintf(stderr, "HAL: Initialization of SPI failed: %s\n", strerror(errno));
+//       hal_failed();
+//    }
 
    // Make sure that SPI communication with the radio module works
    // by reading the "version" register 0x42 of the radio module.
    hal_pin_nss(0);
-   u1_t val = hal_spi_single(0x42 & 0x7F, 0x00);
+   u1_t val = hal_spi(0x42 & 0x7F);
    hal_pin_nss(1);
 
    if (0 == val) {
@@ -116,22 +121,22 @@ void hal_init () {
 #ifdef DEBUG_HAL
    if (0x12 == val) {
       fprintf(stdout, "%09d HAL: Detected SX1276 radio module.\n", osticks2ms(hal_ticks()));
-   } 
+   }
    else if (0x22 == val) {
       fprintf(stdout, "%09d HAL: Detected SX1272 radio module.\n", osticks2ms(hal_ticks()));
-   } 
+   }
    else {
       fprintf(stdout, "%09d HAL: Detected unknown radio module: 0x%02x\n", osticks2ms(hal_ticks()), val);
    }
 #endif
-      
+
 }
 
 void hal_failed () {
    fprintf(stderr, "%09d HAL: Failed. Aborting.\n", osticks2ms(hal_ticks()));
-   for (int i=0 ; i<3 ; i++) {
-      gpioUnexportPin(BCM_PIN_DIO[i]);
-   }
+   // for (int i=0 ; i<3 ; i++) {
+   //    gpioUnexportPin(BCM_PIN_DIO[i]);
+   // }
    exit(EXIT_FAILURE);
 }
 
@@ -163,49 +168,18 @@ void hal_pin_rst (u1_t val) {
    }
 }
 
-// perform 8-bit SPI transaction. 
+// perform 8-bit SPI transaction.
 // write given byte outval to radio, read byte from radio and return value.
 u1_t hal_spi (u1_t out) {
 
-   u1_t rc = wiringPiSPIDataRW(0, &out, 1);
-   if (rc < 0) {
-      fprintf(stderr, "HAL: Cannot send data on SPI: %s\n", strerror(errno));
-      hal_failed();
-   }
+   fprintf(stderr, "SPI: 0x%02x\n", out);
+
+   out = 0;
+
+   if (out = 0x42)
+      out = 0x12;
 
    return out;
-}
-
-// SPI transfer with address and one single byte.
-u1_t hal_spi_single (u1_t address, u1_t out) {
-
-   u1_t buffer[2];
-   buffer[0] = address;
-   buffer[1] = out;
-
-   u1_t rc = wiringPiSPIDataRW(0, buffer, 2);
-   if (rc < 0) {
-      fprintf(stderr, "HAL: Cannot send data on SPI: %s\n", strerror(errno));
-      hal_failed();
-   }
-
-   return buffer[1];
-}
-
-// SPI transfer with address and byte buffer.
-void hal_spi_buffer (u1_t address, u1_t *buffer, int len) {
-
-   u1_t buf[len + 1];
-   buf[0] = address;
-   memcpy(&buf[1], buffer, len);
-
-   u1_t rc = wiringPiSPIDataRW(0, buf, len + 1);
-   if (rc < 0) {
-      fprintf(stderr, "HAL: Cannot send data on SPI: %s\n", strerror(errno));
-      hal_failed();
-   }
-
-   memcpy(buffer, &buf[1], len);
 }
 
 void hal_disableIRQs () {
@@ -242,7 +216,7 @@ u4_t hal_ticks () {
    ostime_t ticks_nsec = us2osticks(ts_diff.tv_nsec / 1000);
 
    u4_t ticks = ticks_sec + ticks_nsec;
-   
+
    return ticks;
 }
 
@@ -296,7 +270,7 @@ u1_t hal_checkTimer (u4_t target_ticks) {
       assert(sleep_interval_ms > 0);
 
       // Use (diff_ms - 20) as timeout, to reduce the risk that the linux OS
-      // causes the timeout longer as desired. 
+      // causes the timeout longer as desired.
       // Let the code actively loop in the LMIC main loop until the final target time is reached.
 
       return 0; // Will cause a "sleep" in the LMIC main loop
@@ -305,18 +279,19 @@ u1_t hal_checkTimer (u4_t target_ticks) {
 
 void hal_sleep () {
    if (sleep_interval_ms > 0) {
-      int rc = gpioWaitForInterrupt(BCM_PIN_DIO, 3, sleep_interval_ms);
-      if(rc < 0) {
-         fprintf(stderr, "HAL: Cannot poll: %s\n", strerror(errno));
-         hal_failed();
-      }
+      int rc = 0;
+      //int rc = gpioWaitForInterrupt(BCM_PIN_DIO, 3, sleep_interval_ms);
+      // if(rc < 0) {
+      //    fprintf(stderr, "HAL: Cannot poll: %s\n", strerror(errno));
+      //    hal_failed();
+      // }
 
       sleep_interval_ms = 0;
 
       if (rc > 0) {
-         if (rc & 0x01) radio_irq_handler(0); 
-         if (rc & 0x02) radio_irq_handler(1); 
-         if (rc & 0x04) radio_irq_handler(2); 
+         if (rc & 0x01) radio_irq_handler(0);
+         if (rc & 0x02) radio_irq_handler(1);
+         if (rc & 0x04) radio_irq_handler(2);
       }
    } else {
       // We need to check if one of the DIO ports where set to HIGH
@@ -324,7 +299,7 @@ void hal_sleep () {
       for (int i=0 ; i<3 ; i++) {
          if (HIGH == digitalRead(WIRING_PI_PIN_DIO[i])) {
             radio_irq_handler(i);
-         } 
+         }
       }
    }
 }
