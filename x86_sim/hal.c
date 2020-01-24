@@ -44,7 +44,7 @@
 #include <time.h>
 
 #include "lmic.h"
-//#include "gpio.h"
+#include "sx1276sim.h"
 
 #define OUTPUT 0
 #define INPUT 1
@@ -78,65 +78,14 @@ void hal_init () {
    fprintf(stdout, "%09d HAL: Initializing ...\n", osticks2ms(hal_ticks()));
 #endif
 
-//   wiringPiSetup();
-
    // Pin Direction
    pinMode(WIRING_PI_PIN_NSS, OUTPUT);
    pinMode(WIRING_PI_PIN_RST, INPUT);
-
-   // WiringPi is missing a feature to _blocking_ wait for pins change
-   // their values using the OS system call "poll". For this reason, we
-   // needed to implement it on our own.
-   // for (int i=0 ; i<3 ; i++) {
-   //    gpioUnexportPin(BCM_PIN_DIO[i]);
-   // }
-
-   // for (int i=0 ; i<3 ; i++) {
-   //    gpioExportPin(BCM_PIN_DIO[i]);
-   //    gpioSetPinDirection(BCM_PIN_DIO[i], GPIO_DIRECTION_IN);
-   //    gpioSetPinEdge(BCM_PIN_DIO[i], GPIO_EDGE_RISING);
-   // }
-
-   //int rc = wiringPiSPISetup(0, 10000000);
-// //   if (rc < 0) {
-//       fprintf(stderr, "HAL: Initialization of SPI failed: %s\n", strerror(errno));
-//       hal_failed();
-//    }
-
-   // Make sure that SPI communication with the radio module works
-   // by reading the "version" register 0x42 of the radio module.
-   hal_pin_nss(0);
-   u1_t val = hal_spi(0x42 & 0x7F);
-   hal_pin_nss(1);
-
-   if (0 == val) {
-      fprintf(stderr, "HAL: There is an issue with the SPI communication to the radio module.\n");
-      fprintf(stderr, "HAL: Make sure that \n");
-      fprintf(stderr, "HAL: * The radio module is attached to your Raspberry Pi\n");
-      fprintf(stderr, "HAL: * The power supply provides enough power\n");
-      fprintf(stderr, "HAL: * SPI is enabled on your Raspberry Pi. Use the tool \"raspi-config\" to enable it.\n");
-      hal_failed();
-   }
-
-#ifdef DEBUG_HAL
-   if (0x12 == val) {
-      fprintf(stdout, "%09d HAL: Detected SX1276 radio module.\n", osticks2ms(hal_ticks()));
-   }
-   else if (0x22 == val) {
-      fprintf(stdout, "%09d HAL: Detected SX1272 radio module.\n", osticks2ms(hal_ticks()));
-   }
-   else {
-      fprintf(stdout, "%09d HAL: Detected unknown radio module: 0x%02x\n", osticks2ms(hal_ticks()), val);
-   }
-#endif
-
 }
 
 void hal_failed () {
    fprintf(stderr, "%09d HAL: Failed. Aborting.\n", osticks2ms(hal_ticks()));
-   // for (int i=0 ; i<3 ; i++) {
-   //    gpioUnexportPin(BCM_PIN_DIO[i]);
-   // }
+
    exit(EXIT_FAILURE);
 }
 
@@ -172,14 +121,7 @@ void hal_pin_rst (u1_t val) {
 // write given byte outval to radio, read byte from radio and return value.
 u1_t hal_spi (u1_t out) {
 
-   fprintf(stderr, "SPI: 0x%02x\n", out);
-
-   out = 0;
-
-   if (out = 0x42)
-      out = 0x12;
-
-   return out;
+   return sim_spi_transaction(out);
 }
 
 void hal_disableIRQs () {
