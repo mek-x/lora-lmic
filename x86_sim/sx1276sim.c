@@ -78,6 +78,9 @@ register_t registers[] = {
     {RegPaDac,                  0x84,       NULL},
 };
 
+static uint8_t fifoBuffer[256];
+static uint8_t fifoIdx = 0;
+
 int getRegisterIdx(uint8_t off) {
     for (int i = 0; i < ARRAY_SIZE(registers); i++) {
         if (registers[i].reg == off) {
@@ -111,13 +114,15 @@ static uint8_t readReg(uint8_t off) {
 static void writeReg(uint8_t off, uint8_t val) {
     int reg;
 
-    if (off == 0x00 && state != PROCESSING_FIFO) {  // access to FIFO register
+    if (off == RegFifo && state != PROCESSING_FIFO) {  // access to FIFO register
         state = PROCESSING_FIFO;
     }
 
     if (state == PROCESSING_FIFO) { //processing fifo
 
         SIM_DBG("FIFO", "0x%02x", val);
+
+        fifoBuffer[fifoIdx++] = val;
 
         return;
     }
@@ -145,6 +150,13 @@ bool sim_isInt() {
     sleep(1);
 
     SIM_DBG("INT", "waiting for int");
+
+    SIM_DBG("FIFO", "vvv");
+    for (int i = 0; i < fifoIdx; i++) {
+        fprintf(stderr, "%02x ", fifoBuffer[i]);
+    }
+    fprintf(stderr, "\n");
+    SIM_DBG("FIFO", "^^^");
 
     return false;
 }
