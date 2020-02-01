@@ -91,7 +91,7 @@ void hal_failed () {
 
 // set radio NSS pin to given value
 void hal_pin_nss (u1_t val) {
-   digitalWrite(WIRING_PI_PIN_NSS, val==0 ? LOW : HIGH);
+   sim_setNss(val);
 }
 
 // switch between radio RX/TX
@@ -120,8 +120,7 @@ void hal_pin_rst (u1_t val) {
 // perform 8-bit SPI transaction.
 // write given byte outval to radio, read byte from radio and return value.
 u1_t hal_spi (u1_t out) {
-
-   return sim_spi_transaction(out);
+   return sim_spiTransaction(out);
 }
 
 void hal_disableIRQs () {
@@ -220,29 +219,8 @@ u1_t hal_checkTimer (u4_t target_ticks) {
 }
 
 void hal_sleep () {
-   if (sleep_interval_ms > 0) {
-      int rc = 0;
-      //int rc = gpioWaitForInterrupt(BCM_PIN_DIO, 3, sleep_interval_ms);
-      // if(rc < 0) {
-      //    fprintf(stderr, "HAL: Cannot poll: %s\n", strerror(errno));
-      //    hal_failed();
-      // }
-
-      sleep_interval_ms = 0;
-
-      if (rc > 0) {
-         if (rc & 0x01) radio_irq_handler(0);
-         if (rc & 0x02) radio_irq_handler(1);
-         if (rc & 0x04) radio_irq_handler(2);
-      }
-   } else {
-      // We need to check if one of the DIO ports where set to HIGH
-      // to signal an interrupt condition.
-      for (int i=0 ; i<3 ; i++) {
-         if (HIGH == digitalRead(WIRING_PI_PIN_DIO[i])) {
-            radio_irq_handler(i);
-         }
-      }
+   if (sim_isInt()) {
+      radio_irq_handler(0);
    }
 }
 
