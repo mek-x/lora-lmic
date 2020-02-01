@@ -41,6 +41,11 @@ static const u1_t DEVEUI[8]  = { 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF 
 // device-specific AES key (derived from device EUI)
 static const u1_t DEVKEY[16] = { 0xAB, 0x89, 0xEF, 0xCD, 0x23, 0x01, 0x67, 0x45, 0x54, 0x76, 0x10, 0x32, 0xDC, 0xFE, 0x98, 0xBA };
 
+static u4_t devAddr =  0xB710566C;
+static u1_t nwkKey[16] = { 0xE7, 0x63, 0x2E, 0x1C, 0xF3, 0x61, 0x7E, 0xAD, 0xF5, 0xC0, 0xBC, 0x7E, 0x38, 0xEA, 0x09, 0xA8  };
+
+static u1_t artKey[16] = { 0xE7, 0x63, 0x2E, 0x1C, 0xF3, 0x61, 0x7E, 0xAD, 0xF5, 0xC0, 0xBC, 0x7E, 0x38, 0xEA, 0x09, 0xA8  };
+
 
 //////////////////////////////////////////////////
 // APPLICATION CALLBACKS
@@ -66,13 +71,19 @@ void os_getDevKey (u1_t* buf) {
 // MAIN - INITIALIZATION AND STARTUP
 //////////////////////////////////////////////////
 
+void onEvent (ev_t ev);
+
 // initial job
 static void initfunc (osjob_t* j) {
     // reset MAC state
     LMIC_reset();
     // start joining
-    LMIC_startJoining();
+    //LMIC_startJoining();
+
+    LMIC_setSession(0x12345678, devAddr, nwkKey, artKey);
+
     // init done - onEvent() callback will be invoked...
+    onEvent(EV_JOINED);
 }
 
 
@@ -101,12 +112,12 @@ void onEvent (ev_t ev) {
     debug_event(ev);
 
     switch(ev) {
-   
+
       // network joined, session established
       case EV_JOINED:
           debug_val("netid = ", LMIC.netid);
           goto tx;
-        
+
       // scheduled data sent (optionally data received)
       case EV_TXCOMPLETE:
           if(LMIC.dataLen) { // data received in rx slot after tx
@@ -114,10 +125,13 @@ void onEvent (ev_t ev) {
           }
         tx:
 	  // immediately prepare next transmission
-	  LMIC.frame[0] = LMIC.snr;
-	  // schedule transmission (port 1, datalen 1, no ack requested)
-	  LMIC_setTxData2(1, LMIC.frame, 1, 0);
-          // (will be sent as soon as duty cycle permits)
+	  LMIC.frame[0] = 0xde;
+      LMIC.frame[1] = 0xad;
+      LMIC.frame[2] = 0xbe;
+      LMIC.frame[3] = 0xef;
+
+	  LMIC_setTxData2(1, LMIC.frame, 4, 0);
+
 	  break;
     }
 }
