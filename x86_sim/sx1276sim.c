@@ -6,9 +6,21 @@
 
 #include "sx1276sim.h"
 #include "mocks.h"
+#include "udp.h"
 
 #define SIM_DBG(m, s, ...) fprintf(stderr, "[SIM] " m ": " s "\n", ##__VA_ARGS__)
 #define ARRAY_SIZE(a) (sizeof(a)/sizeof(*(a)))
+
+#define OPMODE_MASK      0x07
+#define OPMODE_SLEEP     0x00
+#define OPMODE_STANDBY   0x01
+#define OPMODE_TX        0x03
+#define OPMODE_RX        0x05
+#define OPMODE_RX_SINGLE 0x06
+
+#define IRQ_LORA_RXTOUT_MASK 0x80
+#define IRQ_LORA_RXDONE_MASK 0x40
+#define IRQ_LORA_TXDONE_MASK 0x08
 
 #define RegFifo                                    0x00 // common
 #define RegOpMode                                  0x01 // common
@@ -44,16 +56,19 @@ typedef enum {
 
 static spi_state_t state = WAITING; // initial SPI state machine state
 
-typedef struct {
+typedef struct _register_t{
     const uint8_t reg;
     uint8_t val;
-    uint8_t (*callback)();
+    uint8_t (*callback)(bool write, void *reg);
 } register_t;
+
+uint8_t handleMode(bool w, void *reg);
+uint8_t handleIntReg(bool w, void *reg);
 
 register_t registers[] = {
 //   OffsetName,                DefValue,   Callback
     {RegFifo,                   0x00,       NULL},
-    {RegOpMode,                 0x01,       NULL},
+    {RegOpMode,                 0x01,       handleMode},
     {RegFrfMsb,                 0x6C,       NULL},
     {RegFrfMid,                 0x80,       NULL},
     {RegFrfLsb,                 0x00,       NULL},
@@ -63,7 +78,7 @@ register_t registers[] = {
     {LORARegFifoAddrPtr,        0x08,       NULL},
     {LORARegFifoTxBaseAddr,     0x02,       NULL},
     {LORARegIrqFlagsMask,       0x00,       NULL},
-    {LORARegIrqFlags,           0x15,       NULL},
+    {LORARegIrqFlags,           0x15,       handleIntReg},
     {LORARegModemConfig1,       0x00,       NULL},
     {LORARegModemConfig2,       0x00,       NULL},
     {LORARegSymbTimeoutLsb,     0x00,       NULL},
@@ -81,6 +96,8 @@ register_t registers[] = {
 static uint8_t fifoBuffer[256];
 static uint8_t fifoIdx = 0;
 
+static bool interrupt = false;
+
 int getRegisterIdx(uint8_t off) {
     for (int i = 0; i < ARRAY_SIZE(registers); i++) {
         if (registers[i].reg == off) {
@@ -89,6 +106,45 @@ int getRegisterIdx(uint8_t off) {
     }
 
     return -1;
+}
+
+uint8_t handleMode(bool w, void *r) {
+    register_t *reg = r;
+
+    uint8_t val = reg->val;
+    if (!w) {
+        return val;
+    }
+
+    int regInt = getRegisterIdx(LORARegIrqFlags);
+
+    if ((val & OPMODE_MASK) == OPMODE_TX) {
+        SIM_DBG("TX", "transmitting %d bytes", fifoIdx);
+        transmit(fifoBuffer, fifoIdx);
+        fifoIdx = 0;
+        reg->val = (val & (~OPMODE_MASK)) | OPMODE_STANDBY;
+        registers[regInt].val = IRQ_LORA_TXDONE_MASK;
+        interrupt = true;
+    } else if ((val & OPMODE_MASK) == (OPMODE_RX_SINGLE)) {
+        SIM_DBG("RX", "receiving");
+        sleep(1);
+        reg->val = (val & (~OPMODE_MASK)) | OPMODE_STANDBY;
+        registers[regInt].val = IRQ_LORA_RXTOUT_MASK;
+        interrupt = true;
+    }
+
+    return val;
+}
+
+uint8_t handleIntReg(bool w, void *r) {
+    register_t *reg = r;
+
+    if (w) {
+        reg->val ^= 0xFF;
+        interrupt = false;
+    }
+
+    return reg->val;
 }
 
 static uint8_t readReg(uint8_t off) {
@@ -102,7 +158,7 @@ static uint8_t readReg(uint8_t off) {
     }
 
     if (registers[reg].callback != NULL) {
-        val = registers[reg].callback();
+        val = registers[reg].callback(false, &registers[reg]);
     } else {
         val = registers[reg].val;
     }
@@ -134,13 +190,18 @@ static void writeReg(uint8_t off, uint8_t val) {
     }
 
     registers[reg].val = val;
+
+    if (registers[reg].callback != NULL) {
+        registers[reg].callback(true, &registers[reg]);
+    }
+
     SIM_DBG("REG", "write 0x%02x to 0x%02x", val, off);
 
     return;
 }
 
 void sim_setNss(uint8_t v) {
-    SIM_DBG("PIN", "NSS set %s", v ? "high" : "low");
+    //SIM_DBG("PIN", "NSS set %s", v ? "high" : "low");
 
     state = WAITING;
 }
@@ -149,31 +210,24 @@ bool sim_isInt() {
 
     sleep(1);
 
-    SIM_DBG("INT", "waiting for int");
-
-    SIM_DBG("FIFO", "vvv");
-    for (int i = 0; i < fifoIdx; i++) {
-        fprintf(stderr, "%02x ", fifoBuffer[i]);
+    if (!interrupt) {
+        SIM_DBG("INT", "waiting for int");
+    } else {
+        SIM_DBG("INT", "interrupt triggered");
     }
-    fprintf(stderr, "\n");
-    SIM_DBG("FIFO", "^^^");
 
-    return false;
+    return interrupt;
 }
 
 uint8_t sim_spiTransaction(uint8_t value) {
     static uint8_t buf = 0x00;
     uint8_t tmp = buf;
 
-    SIM_DBG("SPI", "0x%02x", value);
-
     if (state == WAITING) {
         if (value & 0x80) {
             value &= ~0x80;
-            SIM_DBG("SPI", "write");
             state = PROCESSING_WRITE;
         } else {
-            SIM_DBG("SPI", "read");
             state = PROCESSING_READ;
         }
         buf = value;
