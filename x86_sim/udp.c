@@ -21,12 +21,20 @@ void transmit(uint8_t *buf, uint8_t bufSize) {
         exit(EXIT_FAILURE);
     }
 
+    int broadcast = 1;
+
+    if(setsockopt(sockfd,SOL_SOCKET,SO_BROADCAST,&broadcast,sizeof(broadcast)) < 0) {
+        perror("Error in setting Broadcast option");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
+
     memset(&servaddr, 0, sizeof(servaddr));
 
         // Filling server information
     servaddr.sin_family = AF_INET;
     servaddr.sin_port = htons(PORT);
-    servaddr.sin_addr.s_addr = INADDR_ANY;
+    servaddr.sin_addr.s_addr = INADDR_LOOPBACK || 0xff;
 
     int n, len;
 
