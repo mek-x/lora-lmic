@@ -127,11 +127,17 @@ uint8_t handleMode(bool w, void *r) {
         interrupt = true;
     } else if ((val & OPMODE_MASK) == (OPMODE_RX_SINGLE)) {
         SIM_DBG("RX", "receiving");
-        sleep(1);
+        receive(fifoBuffer + fifoIdx, ARRAY_SIZE(fifoBuffer) - fifoIdx);
         reg->val = (val & (~OPMODE_MASK)) | OPMODE_STANDBY;
-        registers[regInt].val = IRQ_LORA_RXTOUT_MASK;
+        registers[regInt].val = IRQ_LORA_RXDONE_MASK;
         interrupt = true;
-    }
+    } /*else if ((val & OPMODE_MASK) == (6)) {
+        SIM_DBG("RX", "receiving scan");
+        receive(fifoBuffer + fifoIdx, ARRAY_SIZE(fifoBuffer) - fifoIdx);
+        reg->val = (val & (~OPMODE_MASK)) | OPMODE_STANDBY;
+        registers[regInt].val = IRQ_LORA_RXDONE_MASK;
+        interrupt = true;
+    } */
 
     return val;
 }
