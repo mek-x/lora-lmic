@@ -157,12 +157,13 @@ static uint8_t readReg(uint8_t off) {
         return 0xff;
     }
 
+    SIM_DBG("REG", "read 0x%02x from 0x%02x", val, off);
+
     if (registers[reg].callback != NULL) {
         val = registers[reg].callback(false, &registers[reg]);
     } else {
         val = registers[reg].val;
     }
-    SIM_DBG("REG", "read 0x%02x from 0x%02x", val, off);
 
     return val;
 }
@@ -189,13 +190,13 @@ static void writeReg(uint8_t off, uint8_t val) {
         return;
     }
 
+    SIM_DBG("REG", "write 0x%02x to 0x%02x", val, off);
+
     registers[reg].val = val;
 
     if (registers[reg].callback != NULL) {
         registers[reg].callback(true, &registers[reg]);
     }
-
-    SIM_DBG("REG", "write 0x%02x to 0x%02x", val, off);
 
     return;
 }
