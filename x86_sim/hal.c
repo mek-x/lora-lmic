@@ -124,9 +124,11 @@ u1_t hal_spi (u1_t out) {
 }
 
 void hal_disableIRQs () {
+   sim_setIrq(0);
 }
 
 void hal_enableIRQs () {
+   sim_setIrq(1);
 }
 
 // store current timer value of the system.
@@ -219,6 +221,7 @@ u1_t hal_checkTimer (u4_t target_ticks) {
 }
 
 void hal_sleep () {
+   hal_enableIRQs();
    if (sim_isInt()) {
       radio_irq_handler(0);
    }

@@ -97,6 +97,7 @@ static uint8_t fifoBuffer[256];
 static uint8_t fifoIdx = 0;
 
 static bool interrupt = false;
+static bool irqEnabled = false;
 
 int getRegisterIdx(uint8_t off) {
     for (int i = 0; i < ARRAY_SIZE(registers); i++) {
@@ -213,9 +214,16 @@ void sim_setNss(uint8_t v) {
     state = WAITING;
 }
 
+void sim_setIrq(uint8_t v) {
+    irqEnabled = (0 == v) ? false : true;
+}
+
 bool sim_isInt() {
 
     sleep(1);
+    if (!irqEnabled) {
+        return false;
+    }
 
     if (!interrupt) {
         SIM_DBG("INT", "waiting for int");
