@@ -4,6 +4,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
@@ -13,7 +14,8 @@
 
 void transmit(uint8_t *buf, size_t bufSize) {
     int sockfd;
-    struct sockaddr_in     servaddr;
+    struct sockaddr_in servaddr;
+    ssize_t n;
 
     // Creating socket file descriptor
     if ( (sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0 ) {
@@ -35,8 +37,6 @@ void transmit(uint8_t *buf, size_t bufSize) {
     servaddr.sin_port = htons(PORT);
     servaddr.sin_addr.s_addr = (in_addr_t) 0xff00007f;
 
-    ssize_t n;
-
     n = sendto(sockfd, buf, bufSize, 0,
         (const struct sockaddr *)&servaddr, sizeof(servaddr));
 
@@ -48,9 +48,12 @@ void transmit(uint8_t *buf, size_t bufSize) {
     close(sockfd);
 }
 
-void receive(uint8_t *buf, size_t bufSize) {
-    int sockfd;
+int receive(uint8_t *buf, size_t bufSize) {
+    int sockfd, one;
+    struct timeval tv;
     struct sockaddr_in s_in_me, s_in_other;
+    ssize_t n;
+    socklen_t socklen;
 
     // Creating socket file descriptor
     if ( (sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0 ) {
@@ -58,10 +61,18 @@ void receive(uint8_t *buf, size_t bufSize) {
         exit(EXIT_FAILURE);
     }
 
-    int one = 1;
-    if(setsockopt(sockfd,SOL_SOCKET,SO_REUSEADDR,&one,sizeof(one)) < 0) {
+    one = 1;
+    if(setsockopt(sockfd,SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) < 0) {
         perror("Error in setting reuse option");
         close(sockfd);
+        exit(EXIT_FAILURE);
+    }
+
+    memset(&tv, 0, sizeof(tv));
+
+    tv.tv_sec = 1;
+    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+        perror("Error in setting timeout");
         exit(EXIT_FAILURE);
     }
 
@@ -78,8 +89,7 @@ void receive(uint8_t *buf, size_t bufSize) {
         exit(EXIT_FAILURE);
     }
 
-    ssize_t n;
-    socklen_t socklen = sizeof(struct sockaddr_in);
+    socklen = sizeof(struct sockaddr_in);
 
     n = recvfrom(sockfd, buf, bufSize, 0,
         (struct sockaddr *)&s_in_other, &socklen);
@@ -90,4 +100,6 @@ void receive(uint8_t *buf, size_t bufSize) {
     printf("recvfrom(): received %d bytes\n", n);
 
     close(sockfd);
+
+    return n;
 }
