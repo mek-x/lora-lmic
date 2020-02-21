@@ -32,8 +32,12 @@
 #define RegLna                                     0x0C // common
 #define LORARegFifoAddrPtr                         0x0D
 #define LORARegFifoTxBaseAddr                      0x0E
+#define LORARegFifoRxCurrentAddr                   0x10
 #define LORARegIrqFlagsMask                        0x11
 #define LORARegIrqFlags                            0x12
+#define LORARegRxNbBytes                           0x13
+#define LORARegPktSnrValue                         0x19
+#define LORARegPktRssiValue                        0x1A
 #define LORARegModemConfig1                        0x1D
 #define LORARegModemConfig2                        0x1E
 #define LORARegSymbTimeoutLsb                      0x1F
@@ -77,8 +81,12 @@ register_t registers[] = {
     {RegLna,                    0x20,       NULL},
     {LORARegFifoAddrPtr,        0x08,       NULL},
     {LORARegFifoTxBaseAddr,     0x02,       NULL},
+    {LORARegFifoRxCurrentAddr,  0x00,       NULL},
     {LORARegIrqFlagsMask,       0x00,       NULL},
     {LORARegIrqFlags,           0x15,       handleIntReg},
+    {LORARegRxNbBytes,          0x00,       NULL},
+    {LORARegPktSnrValue,        0x12,       NULL},  // some random value
+    {LORARegPktRssiValue,       0x34,       NULL},  // some random data
     {LORARegModemConfig1,       0x00,       NULL},
     {LORARegModemConfig2,       0x00,       NULL},
     {LORARegSymbTimeoutLsb,     0x00,       NULL},
@@ -111,13 +119,15 @@ int getRegisterIdx(uint8_t off) {
 
 uint8_t handleMode(bool w, void *r) {
     register_t *reg = r;
+    int regInt;
+    int n;
 
     uint8_t val = reg->val;
     if (!w) {
         return val;
     }
 
-    int regInt = getRegisterIdx(LORARegIrqFlags);
+    regInt = getRegisterIdx(LORARegIrqFlags);
 
     if ((val & OPMODE_MASK) == OPMODE_TX) {
         SIM_DBG("TX", "transmitting %d bytes", fifoIdx);
@@ -128,17 +138,23 @@ uint8_t handleMode(bool w, void *r) {
         interrupt = true;
     } else if ((val & OPMODE_MASK) == (OPMODE_RX_SINGLE)) {
         SIM_DBG("RX", "receiving");
-        receive(fifoBuffer + fifoIdx, ARRAY_SIZE(fifoBuffer) - fifoIdx);
+        n = receive(fifoBuffer + fifoIdx, ARRAY_SIZE(fifoBuffer) - fifoIdx);
         reg->val = (val & (~OPMODE_MASK)) | OPMODE_STANDBY;
-        registers[regInt].val = IRQ_LORA_RXDONE_MASK;
+        if (n >= 0) {
+            registers[regInt].val = IRQ_LORA_RXDONE_MASK;
+        } else {
+            registers[regInt].val = IRQ_LORA_RXTOUT_MASK;
+        }
         interrupt = true;
-    } /*else if ((val & OPMODE_MASK) == (6)) {
+    } else if ((val & OPMODE_MASK) == (OPMODE_RX)) {
         SIM_DBG("RX", "receiving scan");
-        receive(fifoBuffer + fifoIdx, ARRAY_SIZE(fifoBuffer) - fifoIdx);
-        reg->val = (val & (~OPMODE_MASK)) | OPMODE_STANDBY;
-        registers[regInt].val = IRQ_LORA_RXDONE_MASK;
-        interrupt = true;
-    } */
+        n = receive(fifoBuffer + fifoIdx, ARRAY_SIZE(fifoBuffer) - fifoIdx);
+        //reg->val = (val & (~OPMODE_MASK)) | OPMODE_STANDBY;
+        if (n >= 0) {
+            registers[regInt].val = IRQ_LORA_RXDONE_MASK;
+            interrupt = true;
+        }
+    }
 
     return val;
 }
@@ -164,13 +180,13 @@ static uint8_t readReg(uint8_t off) {
         return 0xff;
     }
 
-    SIM_DBG("REG", "read 0x%02x from 0x%02x", val, off);
-
     if (registers[reg].callback != NULL) {
         val = registers[reg].callback(false, &registers[reg]);
     } else {
         val = registers[reg].val;
     }
+
+    SIM_DBG("REG", "read 0x%02x from 0x%02x", val, off);
 
     return val;
 }
