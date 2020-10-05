@@ -33,7 +33,7 @@ ${BUILDDIR}/%.o: %.s | ${BUILDDIR}
 	${AS} ${ASOPTS} -I${INC} $< -o $@ 
 
 ${BUILDDIR}/%.out: ${OBJS}
-	${LN} ${LNOPTS} -o $@ $^
+	${LN} -o $@ $^ ${LNOPTS}
 
 
 #all: ${BUILDDIR}/$(notdir ${CURDIR}).out ${BUILDDIR}/$(notdir ${CURDIR}).bin ${BUILDDIR}/$(notdir ${CURDIR}).hex
